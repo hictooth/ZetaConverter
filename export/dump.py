@@ -34,8 +34,8 @@ BOARD_URL = "http://w11.zetaboards.com/dontcryjennifer/" # enter your board url 
 ADMIN_URL = "http://w11.zetaboards.com/dontcryjennifer/admin/" # url of the ACP, with a trailing /
 TAPATALK_URL = "https://www.tapatalk.com/groups/dontcryjennifer/"
 
-COOKIE = {"6090009sess": "076a0d12f2b0a41c003826499"} # cookie of user that has either Administrator access, or Admin Assistant access
-COOKIE_ADMIN = {"6090009acp":"560f9b8fbc647a543826499"} # cookie of user when they are logged in to the ACP - this has a short expiry rate
+COOKIE = {"1810868sess": "176a0d14f2b8f41c003826699"} # cookie of user that has either Administrator access, or Admin Assistant access
+COOKIE_ADMIN = {"1810868acp":"564f9b8fbd647a543826479"} # cookie of user when they are logged in to the ACP - this has a short expiry rate
 COOKIE_POLL = COOKIE
 
 
