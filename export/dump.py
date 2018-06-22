@@ -57,15 +57,18 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 def getZetaUrl(url):
+    counter = 0
+    if '.zetaboards.com' in url:
+      counter = 1
     parsed = urlparse(url)
     path = parsed.path
     parts = path.split('/')
-    if (len(parts) >= 3):
-        type = parts[1]
-        id = parts[2]
+    if (len(parts) >= (3+counter)):
+        type = parts[1+counter]
+        id = parts[2+counter]
         return [type, id]
-    elif (len(parts) >= 2):
-        type = parts[1]
+    elif (len(parts) >= (2+counter)):
+        type = parts[1+counter]
         return [type, False]
     return [False, False]
 
@@ -159,6 +162,7 @@ def scrapeForums():
 
 def getForumIDs():
     forumIDs = findAllForums(BOARD_URL)
+    checked = [BOARD_URL]
 
     finished = False
     while finished == False:
@@ -169,10 +173,14 @@ def getForumIDs():
         for id in forumIDs:
             url = BOARD_URL + "forum/" + id + "/"
 
+            if url in checked:
+                continue
+
             newIDs = findAllForums(url)
+            checked.append(url)
             for newID in newIDs:
                 if newID not in forumIDs:
-                    forumIDs.append(newIDs)
+                    forumIDs.append(newID)
 
 
         # are we finished?
