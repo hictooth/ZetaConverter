@@ -15,8 +15,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 
 import sqlite3
 import requests
@@ -26,8 +26,11 @@ import datetime
 import sys
 import traceback
 import mimetypes
+import dateutil.parser
 from bs4 import BeautifulSoup
 from urlparse import urlparse
+from threading import Thread
+
 
 
 BOARD_URL = "http://w11.zetaboards.com/dontcryjennifer/" # enter your board url WITHOUT the index/, and with a trailing /
@@ -38,11 +41,9 @@ COOKIE = {"1810868sess": "176a0d14f2b8f41c003826699"} # cookie of user that has 
 COOKIE_ADMIN = {"1810868acp":"564f9b8fbd647a543826479"} # cookie of user when they are logged in to the ACP - this has a short expiry rate
 COOKIE_POLL = COOKIE
 
-
-# untested. probably works, but probably best to leave alone
+# untested. probably works, but...
 DOWNLOAD_AVATARS = False
 DOWNLOAD_PHOTOS = False
-USE_TAPATALK_JOIN_DATE = False
 
 
 # for nice colored printing
@@ -124,14 +125,22 @@ def scrapeBoard():
 def scrapeForums():
     print "(2/5) ########## SCRAPING FORUMS ##########"
     ids = getForumIDs()
+    print ids
     insertCount = 1
 
     for id in ids:
+        if not id.isdigit():
+            continue
+
         url = BOARD_URL + "forum/" + id + "/"
         r = requests.get(url, cookies=COOKIE)
         if r.status_code != 200:
             print bcolors.FAIL + "Non-200 status code scraping " + url + bcolors.ENDC
             sys.exit(0)
+
+        if r.url != url:
+            # this is a redirect forum, ignore
+            continue
 
         # parse webpage
         soup = BeautifulSoup(r.text, "html.parser")
@@ -325,7 +334,7 @@ def scrapeTopics():
                     # get polls - placeholder for poll ID
                     pollID = None
 
-                    # load topic page as cookie user
+                    # load topic page as hictoothbot
                     url = BOARD_URL + "topic/" + str(id) + "/1/"
                     r = requests.get(url, cookies=COOKIE_POLL)
                     if r.status_code != 200:
@@ -336,89 +345,137 @@ def scrapeTopics():
                     soup = BeautifulSoup(r.text, "html.parser")
 
                     # get poll (if there is one)
+                    #polls = soup.find_all("table", {"class":"poll"})
+                    #if polls != None and len(polls) != 0:
+                        #for poll in polls:
                     poll = soup.find("table", {"class":"poll"})
                     if poll != None:
-                        question = poll.find("thead").find("th").text.strip()
-                        options = []
-                        votes = []
+                        if True: # dummy
+                            question = poll.find("thead").find("th").text.strip()
+                            options = []
+                            votes = []
 
-                        # get number of options that can be chosen
-                        numChosen = 1
-                        selectUpTo = soup.find(string="Select up to ")
-                        if selectUpTo != None:
-                            choices = selectUpTo.find_next("strong")
-                            if choices == None:
-                                break
-                            numChosenText = choices.text.replace(" choices", "")
-                            numChosen = int(numChosenText)
+                            # get number of options that can be chosen
+                            numChosen = 1
+                            selectUpTo = soup.find(string="Select up to ")
+                            if selectUpTo != None:
+                                choices = selectUpTo.find_next("strong")
+                                if choices == None:
+                                    break
+                                numChosenText = choices.text.replace(" choices", "")
+                                numChosen = int(numChosenText)
 
-                        # now submit an empty answer so we can get the results
-                        form = soup.find("form", id=re.compile('^poll'))
-                        pollID = form.get("id").replace("poll", "")
+                            # now submit an empty answer so we can get the results
+                            form = soup.find("form", id=re.compile('^poll'))
+                            pollID = form.get("id").replace("poll", "")
 
-                        voteForNoneButton = form.find("a", {"class":"btn_fake"})
-                        if voteForNoneButton == None:
-                            print bcolors.FAIL + "Error scraping poll, poll doesn't have 'Vote for none' button, likely previously submitted :: " + url + bcolors.ENDC
-                        else:
-
-                            url = voteForNoneButton["href"]
-                            xc = form.find("input", {"name":"xc"}).get("value")
-                            headers = {
-                                "Content-Type": "application/x-www-form-urlencoded"
-                            }
-                            data = {
-                                "xc": xc
-                            }
-
-                            # load poll results as cookie user
-                            r = requests.post(url, data=data, headers=headers, cookies=COOKIE_POLL)
-                            if r.status_code != 200:
-                                print bcolors.FAIL + "Non-200 status code scraping " + url + bcolors.ENDC
-                                sys.exit(0)
-
-                            # check for errors (probably indicating we can't post here)
-                            errorBox = soup.find("table", id="error_box")
-                            if errorBox != None:
-                                print bcolors.FAIL + "Error scraping poll, likely do not have permission to reply to polls here :: " + url + bcolors.ENDC
+                            voteForNoneButton = form.find("a", {"class":"btn_fake"})
+                            if voteForNoneButton == None:
+                                optionContainers = poll.find("td", "c_poll-answer")
+                                if optionContainers == None:
+                                    print bcolors.FAIL + "Error scraping poll, poll doesn't have 'Vote for none' button, likely previously submitted :: " + url + bcolors.ENDC
+                                else:
+                                    # okay, the results are being displayed right in the topic
+                                    scrapePollResults(poll, pollID, question, numChosen)
                             else:
 
-                                # parse poll results
-                                soup = BeautifulSoup(r.text, "html.parser")
+                                url = voteForNoneButton["href"]
+                                xc = form.find("input", {"name":"xc"}).get("value")
+                                headers = {
+                                    "Content-Type": "application/x-www-form-urlencoded"
+                                }
+                                data = {
+                                    "xc": xc
+                                }
 
-                                # get containers for options
-                                poll = soup.find("table", {"class":"poll"})
-                                optionContainers = poll.find_all("td", "c_poll-answer")
-                                voteContainers = poll.find_all("td", "c_poll-votes")
-
-                                # check the votes match the options
-                                if (len(optionContainers) != len(voteContainers)):
-                                    print bcolors.FAIL + "Poll options don't match poll votes :: " + url + bcolors.ENDC
-                                    print optionContainers
-                                    print voteContainers
+                                # load poll results as hictoothbot
+                                r = requests.post(url, data=data, headers=headers, cookies=COOKIE_POLL)
+                                if r.status_code != 200:
+                                    print bcolors.FAIL + "Non-200 status code scraping " + url + bcolors.ENDC
                                     sys.exit(0)
 
-                                # loop through options
-                                for i in range(0, len(optionContainers)):
-                                    option = optionContainers[i].text.strip()
-                                    vote = voteContainers[i].find("strong").text.strip()
-                                    options.append(option)
-                                    votes.append(vote)
+                                # check for errors (probably indicating we can't post here)
+                                errorBox = soup.find("table", id="error_box")
+                                if errorBox != None:
+                                    print bcolors.FAIL + "Error scraping poll, likely do not have permission to reply to polls here :: " + url + bcolors.ENDC
+                                else:
 
-                                # insert poll into database
-                                values = (pollID, question, numChosen)
-                                cursor.execute('INSERT INTO poll VALUES (?,?,?)', values)
+                                    # parse poll results
+                                    soup = BeautifulSoup(r.text, "html.parser")
 
-                                # insert options into database
-                                for i in range(0, len(options)):
-                                    values = ((i+1), pollID, options[i], votes[i])
-                                    cursor.execute('INSERT INTO option VALUES (?,?,?,?)', values)
+                                    # get containers for options
+                                    poll = soup.find("table", {"class":"poll"})
+                                    scrapePollResults(poll, pollID, question, numChosen)
+                                    #optionContainers = poll.find_all("td", "c_poll-answer")
+                                    #voteContainers = poll.find_all("td", "c_poll-votes")
+
+                                    # check the votes match the options
+                                    #if (len(optionContainers) != len(voteContainers)):
+                                    #    print bcolors.FAIL + "Poll options don't match poll votes :: " + url + bcolors.ENDC
+                                    #    print optionContainers
+                                    #    print voteContainers
+                                    #    sys.exit(0)
+
+                                    # loop through options
+                                    #for i in range(0, len(optionContainers)):
+                                    #    option = optionContainers[i].text.strip()
+                                    #    vote = voteContainers[i].find("strong").text.strip()
+                                    #    options.append(option)
+                                    #    votes.append(vote)
+
+                                    # insert poll into database
+                                    #values = (pollID, question, numChosen)
+                                    #cursor.execute('INSERT INTO poll VALUES (?,?,?)', values)
+
+                                    # insert options into database
+                                    #for i in range(0, len(options)):
+                                    #    values = ((i+1), pollID, options[i], votes[i])
+                                    #    cursor.execute('INSERT INTO option VALUES (?,?,?,?)', values)
 
 
                     # insert it into the database
                     values = (id, forumID, pollID, name, description, tags, views)
-                    cursor.execute('INSERT INTO topic VALUES (?,?,?,?,?,?,?)', values)
+                    try:
+                        cursor.execute('INSERT INTO topic VALUES (?,?,?,?,?,?,?)', values)
+                    except sqlite3.IntegrityError:
+                        print "SQLITE3 INTEGRITY ERROR - inserting topic into database\n"
+                        print values
+                        print ""
+                        traceback.print_exc()
                     conn.commit()
                     print bcolors.OKGREEN + "Inserted topic ID: " + str(id) + bcolors.ENDC
+
+
+
+def scrapePollResults(poll, pollID, question, numChosen):
+    options = []
+    votes = []
+
+    optionContainers = poll.find_all("td", "c_poll-answer")
+    voteContainers = poll.find_all("td", "c_poll-votes")
+
+    # check the votes match the options
+    if (len(optionContainers) != len(voteContainers)):
+        print bcolors.FAIL + "Poll options don't match poll votes :: " + url + bcolors.ENDC
+        print optionContainers
+        print voteContainers
+        sys.exit(0)
+
+    # loop through options
+    for i in range(0, len(optionContainers)):
+        option = optionContainers[i].text.strip()
+        vote = voteContainers[i].find("strong").text.strip()
+        options.append(option)
+        votes.append(vote)
+
+    # insert poll into database
+    values = (pollID, question, numChosen)
+    cursor.execute('INSERT INTO poll VALUES (?,?,?)', values)
+
+    # insert options into database
+    for i in range(0, len(options)):
+        values = ((i+1), pollID, options[i], votes[i])
+        cursor.execute('INSERT INTO option VALUES (?,?,?,?)', values)
 
 
 
@@ -450,7 +507,8 @@ def parseDate(zetaDate):
         postDate = day.replace(hour=postDate.hour, minute=postDate.minute, second=postDate.second)
 
     else:
-        postDate = datetime.datetime.strptime(zetaDate, "%b %d %Y, %I:%M %p")
+        #postDate = datetime.datetime.strptime(zetaDate, "%b %d %Y, %I:%M %p")
+        postDate = dateutil.parser.parse(zetaDate)
 
     # convert postDate into epoch
     epoch = postDate.strftime('%s')
@@ -460,7 +518,7 @@ def parseDate(zetaDate):
 
 def scrapePosts():
     print "(4/5) ########## SCRAPING POSTS  ##########"
-    topics = cursor.execute("SELECT id FROM topic").fetchall()
+    topics = cursor.execute("SELECT id FROM topic WHERE").fetchall()
     for topic in topics:
         topicID = topic[0]
         print "Scraping topic " + str(topicID)
@@ -473,7 +531,8 @@ def scrapePosts():
             sys.exit(0)
 
         # parse webpage
-        soup = BeautifulSoup(r.text, "html.parser")
+        #soup = BeautifulSoup(r.text, "html.parser")
+        soup = BeautifulSoup(r.text, "html5lib")
 
         # get total pages
         maxPage = int(getMaxPage(soup))
@@ -493,7 +552,8 @@ def scrapePosts():
                     sys.exit(0)
 
                 # parse webpage
-                soup = BeautifulSoup(r.text, "html.parser")
+                #soup = BeautifulSoup(r.text, "html.parser")
+                soup = BeautifulSoup(r.text, "html5lib")
 
             # get list of posts
             postContainer = soup.find("table", id="topic_viewer")
@@ -544,10 +604,14 @@ def scrapePosts():
                             sys.exit(0)
 
                         # parse webpage
-                        soup = BeautifulSoup(r.text, "html.parser")
+                        #soup = BeautifulSoup(r.text, "html.parser")
+                        soup = BeautifulSoup(r.text, "html5lib")
 
                         # get bbcode of the post we're quoting
-                        bbcode = soup.find("textarea", id="txt_quote").contents[0]
+                        try:
+                            bbcode = soup.find("textarea", id="txt_quote").contents[0]
+                        except:
+                            bbcode = ''
 
                 # now save this post in the database
                 values = (postID, topicID, memberID, date, bbcode, html)
@@ -634,11 +698,36 @@ def scrapeMembers():
                 pms = form.find("input", {"type":"radio", "name":"ban_pm", "checked":"checked"}).get("value")
                 ipbans = form.find("input", {"type":"radio", "name":"ban_pm", "checked":"checked"}).get("value")
 
-                location = form.find("input", {"name":"loc"}).get("value")
-                aol = form.find("input", {"name":"aim"}).get("value")
-                yahoo = form.find("input", {"name":"yim"}).get("value")
-                msn = form.find("input", {"name":"msn"}).get("value")
-                homepage = form.find("input", {"name":"www"}).get("value")
+                #location = form.find("input", {"name":"loc"}).get("value")
+                #aol = form.find("input", {"name":"aim"}).get("value")
+                #yahoo = form.find("input", {"name":"yim"}).get("value")
+                #msn = form.find("input", {"name":"msn"}).get("value")
+                #homepage = form.find("input", {"name":"www"}).get("value")
+
+                try:
+                    location = form.find("input", {"name":"loc"}).get("value")
+                except:
+                    location = ''
+
+                try:
+                    aol = form.find("input", {"name":"aim"}).get("value")
+                except:
+                    aol = ''
+
+                try:
+                    yahoo = form.find("input", {"name":"yim"}).get("value")
+                except:
+                    yahoo = ''
+
+                try:
+                    homepage = form.find("input", {"name":"www"}).get("value")
+                except:
+                    homepage = ''
+
+                try:
+                    msn = form.find("input", {"name":"msn"}).get("value")
+                except:
+                    msn = ''
 
                 interestsArr = form.find("textarea", {"name":"interests"}).contents
                 signaturebbcodeArr = form.find("textarea", {"name":"sig"}).contents
@@ -646,7 +735,10 @@ def scrapeMembers():
                 photo = form.find("input", {"name":"photo"})
                 if photo == None:
                     # likely to be an actual img element
-                    photo = soup.find("td", {"class":"c_desc"}, string="Photo").find_next("img").get("src")
+                    try:
+                        photo = soup.find("td", {"class":"c_desc"}, string="Photo").find_next("img").get("src")
+                    except:
+                        photo = ''
                 else:
                     photo = photo.get("value")
 
@@ -743,22 +835,26 @@ def scrapeMembers():
                 try:
                     joindate = getTapatalkJoinDate(number, username)
                 except:
-                    traceback.print_exc()
-                    print "Error getting tapatalk join date for member id " + str(userID)
-                    print "getting zeta join date instead"
+                    #traceback.print_exc()
+                    #print "Error getting tapatalk join date for member id " + str(userID)
+                    #print "getting zeta join date instead"
                     joined = soup.find("dl", {"class":"user_info"}).find("dt", string="Joined:").find_next("dd").text
-                    joindate = datetime.datetime.strptime(joined, "%B %Y")
+                    #joindate = datetime.datetime.strptime(joined, "%B %Y")
+                    joindate = dateutil.parser.parse(joined)
                     joindate = joindate.strftime('%s')
 
                 localTime = soup.find("td", string="Member's Local Time").find_next("td").text
-                localTime = datetime.datetime.strptime(localTime, "%b %d %Y, %I:%M %p")
+                #localTime = datetime.datetime.strptime(localTime, "%b %d %Y, %I:%M %p")
+                localTime = dateutil.parser.parse(localTime)
                 utcTime = datetime.datetime.utcnow()
                 difference = localTime - utcTime
                 secondsDifference = difference.total_seconds()
                 secondsDifference = int(60 * round(float(secondsDifference)/60)) # round to nearest minute
                 hourDifference = secondsDifference/3600.0
 
-                lastActiveStr = soup.find("td", string="Last Activity").find_next("td").text
+                lastActiveStr = soup.find("td", string="Last Activity").find_next("td").text.encode('utf-8')
+                lastActiveStr = lastActiveStr.split('·')[0].strip()
+                print lastActiveStr
                 lastActive = parseDate(lastActiveStr)
 
 
@@ -774,9 +870,7 @@ def scrapeMembers():
 
 
 def getTapatalkJoinDate(userNumber, username):
-    if not USE_TAPATALK_JOIN_DATE:
-        raise Exception('Tapatalk is being annoying, skip this for now and use zeta join dates')
-    
+    raise Exception('Tapatalk is being annoying, skip this for now and use zeta join dates')
     # something good about tapatalk! we can get the FULL join date from them!
     url = TAPATALK_URL + "memberlist.php?mode=viewprofile&u=" + str(userNumber)
     r = requests.get(url, cookies=COOKIE_ADMIN, timeout=60)
@@ -852,7 +946,7 @@ conn = sqlite3.connect('database.db')
 cursor = conn.cursor()
 
 setupDatabase()
-scrapeBoard()
+#scrapeBoard()
 scrapeForums()
 scrapeTopics()
 scrapePosts()
