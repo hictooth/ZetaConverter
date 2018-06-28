@@ -519,7 +519,7 @@ def parseDate(zetaDate):
 
 def scrapePosts():
     print "(4/5) ########## SCRAPING POSTS  ##########"
-    topics = cursor.execute("SELECT id FROM topic WHERE").fetchall()
+    topics = cursor.execute("SELECT id FROM topic").fetchall()
     for topic in topics:
         topicID = topic[0]
         print "Scraping topic " + str(topicID)
