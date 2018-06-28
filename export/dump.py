@@ -511,7 +511,8 @@ def parseDate(zetaDate):
         postDate = dateutil.parser.parse(zetaDate)
 
     # convert postDate into epoch
-    epoch = postDate.strftime('%s')
+    #epoch = postDate.strftime('%s')
+    epoch = (postDate - datetime.datetime(1970,1,1)).total_seconds()
 
     return int(epoch)
 
@@ -841,7 +842,8 @@ def scrapeMembers():
                     joined = soup.find("dl", {"class":"user_info"}).find("dt", string="Joined:").find_next("dd").text
                     #joindate = datetime.datetime.strptime(joined, "%B %Y")
                     joindate = dateutil.parser.parse(joined)
-                    joindate = joindate.strftime('%s')
+                    #joindate = joindate.strftime('%s')
+                    joindate = (joindate - datetime.datetime(1970,1,1)).total_seconds()
 
                 localTime = soup.find("td", string="Member's Local Time").find_next("td").text
                 #localTime = datetime.datetime.strptime(localTime, "%b %d %Y, %I:%M %p")
@@ -902,7 +904,8 @@ def getTapatalkJoinDate(userNumber, username):
     joinedString = soup.find("span", string="Joined").find_next("span").text
     joinedString = joinedString.replace("th, ", " ").replace("st, ", "").replace("nd, ", "")
     joined = datetime.datetime.strptime("April 12 2014, 1:44 pm", "%B %d %Y, %I:%M %p")
-    joined = joined.strftime('%s')
+    #joined = joined.strftime('%s')
+    joined = (joined - datetime.datetime(1970,1,1)).total_seconds()
 
     return joined
 
