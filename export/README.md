@@ -6,9 +6,9 @@ Program to export a ZetaBoards board as a sqlite3 database file.
 
 This program scrapes a ZetaBoards forum, and creates a sqlite3 database file with all the members, topics, posts, polls and emojis from that forum.
 
-To run this program, you will need Python 2.7 installed, with modules sqlite3, requests, and beautifulsoup4 installed. To install them, use the command:
+To run this program, you will need Python 2.7 installed, with modules requests beautifulsoup4 html5lib demjson python-dateutil installed. To install them, use the command:
 
-`pip install sqlite3 requests beautifulsoup4`
+`pip install requests beautifulsoup4 html5lib demjson python-dateutil`
 
 Then download the `dump.py` file. To setup the exporter, some settings in `dump.py` need to be modified for your board. Open it up in your favourite text editor, and change lines 33 to 38 to match your board URL, admin panel URL, tapatalk URL, and authentication cookies.
 
