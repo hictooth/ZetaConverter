@@ -1,23 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# ZetaDump - export a ZetaBoards forum as a sqlite3 database
-# Copyright (C) 2018  tapedrive
-# 
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-# 
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-
 import sqlite3
 import requests
 import demjson
@@ -32,14 +15,11 @@ from urlparse import urlparse
 from threading import Thread
 
 
-
-BOARD_URL = "http://w11.zetaboards.com/dontcryjennifer/" # enter your board url WITHOUT the index/, and with a trailing /
-ADMIN_URL = "http://w11.zetaboards.com/dontcryjennifer/admin/" # url of the ACP, with a trailing /
-TAPATALK_URL = "https://www.tapatalk.com/groups/dontcryjennifer/"
-
-COOKIE = {"1810868sess": "176a0d14f2b8f41c003826699"} # cookie of user that has either Administrator access, or Admin Assistant access
-COOKIE_ADMIN = {"1810868acp":"564f9b8fbd647a543826479"} # cookie of user when they are logged in to the ACP - this has a short expiry rate
+BOARD_URL = "http://s4.zetaboards.com/MyBoardName/"
+ADMIN_URL = "http://s4.zetaboards.com/MyBoardName/admin/"
+COOKIE = {"6068663sess": "04ab6ae6994af2ff126097657"}
 COOKIE_POLL = COOKIE
+COOKIE_ADMIN = {"6068663acp": "c3798e7ba649d6ac6097657"}
 
 # untested. probably works, but...
 DOWNLOAD_AVATARS = False
@@ -80,6 +60,7 @@ def setupDatabase():
     cursor.execute('''CREATE TABLE forum (id integer PRIMARY KEY, parent integer, name text, description text, `order` integer)''')
     cursor.execute('''CREATE TABLE topic (id integer PRIMARY KEY, forum integer, poll integer, name text, description text, tags text, views integer)''')
     cursor.execute('''CREATE TABLE post (id integer PRIMARY KEY, topic integer, member integer, date integer, bbcode text, html text)''')
+    cursor.execute('''CREATE INDEX post_idx ON post (id)''')
     cursor.execute('''CREATE INDEX member_idx ON post (member)''')
     cursor.execute('''CREATE INDEX topic_idx ON post (topic)''')
     cursor.execute('''CREATE TABLE poll (id integer PRIMARY KEY, question text, options integer)''')
@@ -87,6 +68,7 @@ def setupDatabase():
     cursor.execute('''CREATE TABLE member
     (id integer PRIMARY KEY, name text, password text, email text, birthday integer, number integer, joined integer, ip text, `group` text, title text, warning integer, pms integer, ipbans integer, photoremote text, photolocal text, avatarremote text, avatarlocal text, interests text, signaturebb text, signaturehtml text, location text, aol text, yahoo text, msn text, homepage text, lastactive integer, hourdifference real, numposts integer)''')
     cursor.execute('''CREATE TABLE emoji (id integer PRIMARY KEY, code text, remote text, local text)''')
+    cursor.execute('''CREATE TABLE attachment (id integer PRIMARY KEY, url text, filename text, post integer)''')
     # save the changes to the database
     conn.commit()
 
@@ -99,7 +81,7 @@ def scrapeBoard():
         sys.exit(0)
 
     # parse webpage
-    soup = BeautifulSoup(r.text, "html.parser")
+    soup = BeautifulSoup(r.text, "html5lib")
 
     # get javascript data - bit of hackery here
     scripts = soup.find_all("script")
@@ -143,7 +125,7 @@ def scrapeForums():
             continue
 
         # parse webpage
-        soup = BeautifulSoup(r.text, "html.parser")
+        soup = BeautifulSoup(r.text, "html5lib")
 
         # get name of this forum
         name = soup.title.string
@@ -200,6 +182,7 @@ def getForumIDs():
 
 
 def findAllForums(url):
+    print url
     forumIDs = []
 
     # get board main page
@@ -209,7 +192,7 @@ def findAllForums(url):
         sys.exit(0)
 
     # parse webpage
-    soup = BeautifulSoup(r.text, "html.parser")
+    soup = BeautifulSoup(r.text, "html5lib")
 
     # find all urls
     urls = soup.find_all("a", href=True)
@@ -257,7 +240,7 @@ def scrapeTopics():
             sys.exit(0)
 
         # parse webpage
-        soup = BeautifulSoup(r.text, "html.parser")
+        soup = BeautifulSoup(r.text, "html5lib")
 
         # get total pages
         maxPage = int(getMaxPage(soup))
@@ -277,7 +260,7 @@ def scrapeTopics():
                     sys.exit(0)
 
                 # parse webpage
-                soup = BeautifulSoup(r.text, "html.parser")
+                soup = BeautifulSoup(r.text, "html5lib")
 
             # get list of topics
             topicContainer = soup.find("form", {"id": "inlinetopic"})
@@ -325,7 +308,8 @@ def scrapeTopics():
                         views = views.parent
                     views = views.find("td", {"class": "c_cat-views"})
                     if views == None:
-                        print bcolors.WARNING + "No views found :: " + topic.parent.parent.parent + bcolors.ENDC
+                        print topic.decode_contents()
+                        print bcolors.WARNING + "No views found :: " + id + " :: this topic has probably been moved" + bcolors.ENDC
                         continue # skip moved topics - we'll pick them up in the correct location
                     views = views.contents[0].strip()
                     views = int(views.replace(",",""))
@@ -334,7 +318,7 @@ def scrapeTopics():
                     # get polls - placeholder for poll ID
                     pollID = None
 
-                    # load topic page as hictoothbot
+                    # load topic page as ...
                     url = BOARD_URL + "topic/" + str(id) + "/1/"
                     r = requests.get(url, cookies=COOKIE_POLL)
                     if r.status_code != 200:
@@ -342,7 +326,7 @@ def scrapeTopics():
                         sys.exit(0)
 
                     # parse topic page
-                    soup = BeautifulSoup(r.text, "html.parser")
+                    soup = BeautifulSoup(r.text, "html5lib")
 
                     # get poll (if there is one)
                     #polls = soup.find_all("table", {"class":"poll"})
@@ -388,7 +372,7 @@ def scrapeTopics():
                                     "xc": xc
                                 }
 
-                                # load poll results as hictoothbot
+                                # load poll results as ...
                                 r = requests.post(url, data=data, headers=headers, cookies=COOKIE_POLL)
                                 if r.status_code != 200:
                                     print bcolors.FAIL + "Non-200 status code scraping " + url + bcolors.ENDC
@@ -401,7 +385,7 @@ def scrapeTopics():
                                 else:
 
                                     # parse poll results
-                                    soup = BeautifulSoup(r.text, "html.parser")
+                                    soup = BeautifulSoup(r.text, "html5lib")
 
                                     # get containers for options
                                     poll = soup.find("table", {"class":"poll"})
@@ -511,10 +495,61 @@ def parseDate(zetaDate):
         postDate = dateutil.parser.parse(zetaDate)
 
     # convert postDate into epoch
-    #epoch = postDate.strftime('%s')
-    epoch = (postDate - datetime.datetime(1970,1,1)).total_seconds()
+    epoch = postDate.strftime('%s')
 
     return int(epoch)
+
+
+def processMySQL():
+    global gTopics, gSql, gDone
+
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+
+    # first get the topics we need
+    gTopics = cursor.execute("SELECT id FROM topic").fetchall()
+
+    # now keep repeating until all threads are done
+    while not gDone:
+        while gSql:
+            sql = gSql.pop(0)
+            sql = sql[0]
+            values = sql[1]
+            cursor.execute(sql, values)
+
+
+def performInsert(sql, values):
+    global gSql
+    sql = [sql, values]
+    gSql.push(sql)
+
+
+def chunks(l, n):
+    # For item i in a range that is a length of l,
+    for i in range(0, len(l), n):
+        # Create an index range for l of n items:
+        yield l[i:i+n]
+
+
+def scrapePosts1():
+    global gTopics
+    print "(4/5) ########## SCRAPING POSTS  ##########"
+
+    #topics = cursor.execute("SELECT id FROM topic").fetchall()
+    while not gTopics:
+        pass # keep looping until populated
+    topicsChunks = list(chunks(topics, 10000)) # break topics into list of 10000 each
+
+    processes = []
+    for chunk in topicsChunks:
+        process = Thread(target=scrapePostsChunk, args=(chunk))
+        process.start()
+        processes.push(process)
+    # make sure we only exit when ALL threads are done
+    for process in processes:
+        process.join()
+
+    print "ALL THREADS COMPLETE"
 
 
 def scrapePosts():
@@ -640,7 +675,7 @@ def scrapeMembers():
         sys.exit(0)
 
     # parse webpage
-    soup = BeautifulSoup(r.text, "html.parser")
+    soup = BeautifulSoup(r.text, "html5lib")
 
     maxPage = int(getMaxPage(soup))
 
@@ -659,7 +694,7 @@ def scrapeMembers():
                 sys.exit(0)
 
             # parse webpage
-            soup = BeautifulSoup(r.text, "html.parser")
+            soup = BeautifulSoup(r.text, "html5lib")
 
         usersContainer = soup.find("table", id="membersearch")
         users = usersContainer.find_all("td", {"class":"ms_name"})
@@ -684,13 +719,17 @@ def scrapeMembers():
                     sys.exit(0)
 
                 # parse webpage
-                soup = BeautifulSoup(r.text, "html.parser")
+                soup = BeautifulSoup(r.text, "html5lib")
 
                 form = soup.find("div", id="main").find("form")
 
                 ip = form.find("td", string="Registered with IP Address:").find_next("td").text
 
-                email = form.find("input", {"name":"email"}).get("value")
+                try:
+                    email = form.find("input", {"name":"email"}).get("value")
+                except:
+                    email = ""
+
                 numPosts = int(form.find("input", {"name":"postcount"}).get("value").replace(",", ""))
                 warning = int(form.find("input", {"name":"warned"}).get("value").replace(",",""))
                 title = form.find("input", {"name":"mem_title"}).get("value")
@@ -746,7 +785,12 @@ def scrapeMembers():
                 avatar = form.find("input", {"name":"av_url"})
                 if avatar == None:
                     # likely to be an actual img element
-                    avatar = soup.find("img", {"class":"avatar"}).get("src")
+                    avatar = soup.find("img", {"class":"avatar"})
+                    if avatar == None:
+                        # give up
+                        avatar = ""
+                    else:
+                        avatar = soup.find("img", {"class":"avatar"}).get("src")
                 else:
                     avatar = avatar.get("value")
 
@@ -798,7 +842,7 @@ def scrapeMembers():
                     sys.exit(0)
 
                 # parse webpage
-                soup = BeautifulSoup(r.text, "html.parser")
+                soup = BeautifulSoup(r.text, "html5lib")
 
                 birthday = ""
                 preBirthday = soup.find("td", string="Birthday:")
@@ -842,8 +886,7 @@ def scrapeMembers():
                     joined = soup.find("dl", {"class":"user_info"}).find("dt", string="Joined:").find_next("dd").text
                     #joindate = datetime.datetime.strptime(joined, "%B %Y")
                     joindate = dateutil.parser.parse(joined)
-                    #joindate = joindate.strftime('%s')
-                    joindate = (joindate - datetime.datetime(1970,1,1)).total_seconds()
+                    joindate = joindate.strftime('%s')
 
                 localTime = soup.find("td", string="Member's Local Time").find_next("td").text
                 #localTime = datetime.datetime.strptime(localTime, "%b %d %Y, %I:%M %p")
@@ -874,7 +917,7 @@ def scrapeMembers():
 def getTapatalkJoinDate(userNumber, username):
     raise Exception('Tapatalk is being annoying, skip this for now and use zeta join dates')
     # something good about tapatalk! we can get the FULL join date from them!
-    url = TAPATALK_URL + "memberlist.php?mode=viewprofile&u=" + str(userNumber)
+    url = "https://www.tapatalk.com/groups/mygrouphere/memberlist.php?mode=viewprofile&u=" + str(userNumber)
     r = requests.get(url, cookies=COOKIE_ADMIN, timeout=60)
     if r.status_code != 200:
         if userNumber < 246:
@@ -884,7 +927,7 @@ def getTapatalkJoinDate(userNumber, username):
         return getTapatalkJoinDate(userNumber - 1, username)
 
     # parse webpage
-    soup = BeautifulSoup(r.text, "html.parser")
+    soup = BeautifulSoup(r.text, "html5lib")
 
     print url
 
@@ -904,8 +947,7 @@ def getTapatalkJoinDate(userNumber, username):
     joinedString = soup.find("span", string="Joined").find_next("span").text
     joinedString = joinedString.replace("th, ", " ").replace("st, ", "").replace("nd, ", "")
     joined = datetime.datetime.strptime("April 12 2014, 1:44 pm", "%B %d %Y, %I:%M %p")
-    #joined = joined.strftime('%s')
-    joined = (joined - datetime.datetime(1970,1,1)).total_seconds()
+    joined = joined.strftime('%s')
 
     return joined
 
@@ -920,7 +962,7 @@ def scrapeEmojis():
         sys.exit(0)
 
     # parse webpage
-    soup = BeautifulSoup(r.text, "html.parser")
+    soup = BeautifulSoup(r.text, "html5lib")
 
     # loop through all emojis
     count = 1
@@ -934,7 +976,8 @@ def scrapeEmojis():
         content_type = r.headers['content-type']
         extension = mimetypes.guess_extension(content_type)
         filename = str(count) + extension
-        open('emoji/' + filename, 'wb').write(r.content)
+        with open('emoji/' + filename, 'wb') as f:
+            f.write(r.content)
 
         # save to database
         values = (count, text, img, filename)
@@ -942,6 +985,60 @@ def scrapeEmojis():
         conn.commit()
         print values
         count = count + 1
+
+
+def scrapeAttachments():
+    print "(7/5) ########## SCRAPING ATTACHMENTS #########"
+
+    # get admin attachments index page
+    url = ADMIN_URL + "?menu=files&c=4&sorting=size"
+    r = requests.get(url, cookies=COOKIE_ADMIN)
+    if r.status_code != 200:
+        print bcolors.FAIL + "Non-200 status code scraping " + url + bcolors.ENDC
+        sys.exit(0)
+
+    # parse webpage
+    soup = BeautifulSoup(r.text, "html5lib")
+
+    maxPage = int(getMaxPage(soup))
+
+    count = 1
+
+    #loop through pages
+    for page in range(1, (maxPage+1)):
+
+        if page != 1:
+            # get admin member search page
+            url = ADMIN_URL + "?menu=files&c=4&sorting=size&pg=" + str(page)
+            r = requests.get(url, cookies=COOKIE_ADMIN)
+            if r.status_code != 200:
+                print bcolors.FAIL + "Non-200 status code scraping " + url + bcolors.ENDC
+                sys.exit(0)
+
+            # parse webpage
+            soup = BeautifulSoup(r.text, "html5lib")
+
+        attachmentRows = soup.find("ul", id="nav").find("table").find_all("tr")
+        attachmentRows = attachmentRows[1:]
+
+        for row in attachmentRows:
+            tds = row.find_all("td")
+
+            attachmentUrl = tds[0].find("a")["href"]
+            postUrl = tds[2].find("a")["href"]
+            postID = int(postUrl[postUrl.find("/findpost/")+10:].replace("/", ""))
+
+            # save the emoji to a file
+            r = requests.get(attachmentUrl, allow_redirects=True)
+            content_disposition = r.headers['content-disposition']
+            filename = re.findall("filename=(.+)", content_disposition)
+            with open('attachemts/' + filename, 'wb') as f:
+                f.write(r.content)
+
+            # save to database
+            values = (count, attachmentUrl, filename, postID)
+            cursor.execute('INSERT INTO attachment VALUES (?,?,?,?)', values)
+            conn.commit()
 
 
 # create sqlite database connection
