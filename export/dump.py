@@ -1050,7 +1050,7 @@ def scrapeAttachments():
             soup = BeautifulSoup(r.text, "html5lib")
 
         attachmentRows = soup.find("ul", id="nav").find_next("table").find_all("tr")
-        attachmentRows = attachmentRows[2:]
+        attachmentRows = attachmentRows[2:-1]
 
         for row in attachmentRows:
             tds = row.find_all("td")
