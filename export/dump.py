@@ -3,17 +3,17 @@
 
 # ZetaDump - export a ZetaBoards forum as a sqlite3 database
 # Copyright (C) 2018  tapedrive
-# 
+#
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -76,7 +76,7 @@ def setupDatabase():
     #cursor.execute('''CREATE TABLE board (id integer, server integer, url text, name text)''')
     cursor.execute('''CREATE TABLE forum (id integer PRIMARY KEY, parent integer, name text, description text, `order` integer)''')
     cursor.execute('''CREATE TABLE topic (id integer PRIMARY KEY, forum integer, poll integer, name text, description text, tags text, views integer)''')
-    cursor.execute('''CREATE TABLE post (id integer PRIMARY KEY, topic integer, member integer, date integer, bbcode text, html text)''')
+    cursor.execute('''CREATE TABLE post (id integer PRIMARY KEY, topic integer, member integer, guest text, date integer, bbcode text, html text)''')
     cursor.execute('''CREATE INDEX post_idx ON post (id)''')
     cursor.execute('''CREATE INDEX member_idx ON post (member)''')
     cursor.execute('''CREATE INDEX topic_idx ON post (topic)''')
@@ -512,7 +512,8 @@ def parseDate(zetaDate):
         postDate = dateutil.parser.parse(zetaDate)
 
     # convert postDate into epoch
-    epoch = postDate.strftime('%s')
+    #epoch = postDate.strftime('%s')
+    epoch = (postDate - datetime.datetime(1970,1,1)).total_seconds()
 
     return int(epoch)
 
@@ -634,10 +635,13 @@ def scrapePosts():
 
                 # check if this post is by a deleted user
                 memberID = None
+                guestName = None
                 if memberLink != None:
                     memberUrl = postHeader.find("td", {"class":"c_username"}).find("a", href=True)["href"]
                     zetaUrl = getZetaUrl(memberUrl)
                     memberID = zetaUrl[1]
+                else:
+                    guestName = postHeader.find("td", {"class":"c_username"}).text
 
                 postBody = postHeader.find_next("tr")
 
@@ -648,9 +652,12 @@ def scrapePosts():
                 # get bbcode text (from reply with quote system)
                 footIcons = postBody.find_next("td", {'class':'c_footicons'})
                 links = footIcons.find_all("a", href=True)
+                donebbcode = False
                 for link in links:
                     if "/post/?mode=2&type=2" in link["href"]:
                         # found the link to the quote page
+                        donebbcode = True
+
                         r = requests.get(link["href"], cookies=COOKIE)
                         if r.status_code != 200:
                             print bcolors.FAIL + "Non-200 status code scraping " + link["href"] + bcolors.ENDC
@@ -666,10 +673,14 @@ def scrapePosts():
                         except:
                             bbcode = ''
 
+                if donebbcode == False:
+                    print "Can't reply to this post: " + str(postID) + " of topic: " + str(topicID)
+                    sys.exit(0)
+
                 # now save this post in the database
-                values = (postID, topicID, memberID, date, bbcode, html)
+                values = (postID, topicID, memberID, guestName, date, bbcode, html)
                 try:
-                    cursor.execute('INSERT INTO post VALUES (?,?,?,?,?,?)', values)
+                    cursor.execute('INSERT INTO post VALUES (?,?,?,?,?,?,?)', values)
                 except sqlite3.IntegrityError:
                     print "SQLITE3 INTEGRITY ERROR - inserting post into database\n"
                     print values
@@ -903,7 +914,8 @@ def scrapeMembers():
                     joined = soup.find("dl", {"class":"user_info"}).find("dt", string="Joined:").find_next("dd").text
                     #joindate = datetime.datetime.strptime(joined, "%B %Y")
                     joindate = dateutil.parser.parse(joined)
-                    joindate = joindate.strftime('%s')
+                    #joindate = joindate.strftime('%s')
+                    joindate = (joindate - datetime.datetime(1970,1,1)).total_seconds()
 
                 localTime = soup.find("td", string="Member's Local Time").find_next("td").text
                 #localTime = datetime.datetime.strptime(localTime, "%b %d %Y, %I:%M %p")
@@ -964,7 +976,8 @@ def getTapatalkJoinDate(userNumber, username):
     joinedString = soup.find("span", string="Joined").find_next("span").text
     joinedString = joinedString.replace("th, ", " ").replace("st, ", "").replace("nd, ", "")
     joined = datetime.datetime.strptime("April 12 2014, 1:44 pm", "%B %d %Y, %I:%M %p")
-    joined = joined.strftime('%s')
+    #joined = joined.strftime('%s')
+    joined = (joined - datetime.datetime(1970,1,1)).total_seconds()
 
     return joined
 
@@ -1009,6 +1022,7 @@ def scrapeAttachments():
 
     # get admin attachments index page
     url = ADMIN_URL + "?menu=files&c=4&sorting=size"
+    print url
     r = requests.get(url, cookies=COOKIE_ADMIN)
     if r.status_code != 200:
         print bcolors.FAIL + "Non-200 status code scraping " + url + bcolors.ENDC
@@ -1035,11 +1049,13 @@ def scrapeAttachments():
             # parse webpage
             soup = BeautifulSoup(r.text, "html5lib")
 
-        attachmentRows = soup.find("ul", id="nav").find("table").find_all("tr")
-        attachmentRows = attachmentRows[1:]
+        attachmentRows = soup.find("ul", id="nav").find_next("table").find_all("tr")
+        attachmentRows = attachmentRows[2:]
 
         for row in attachmentRows:
             tds = row.find_all("td")
+
+            attachmentName = tds[0].find("a").text
 
             attachmentUrl = tds[0].find("a")["href"]
             postUrl = tds[2].find("a")["href"]
@@ -1047,15 +1063,18 @@ def scrapeAttachments():
 
             # save the emoji to a file
             r = requests.get(attachmentUrl, allow_redirects=True)
-            content_disposition = r.headers['content-disposition']
-            filename = re.findall("filename=(.+)", content_disposition)
-            with open('attachemts/' + filename, 'wb') as f:
+            #content_disposition = r.headers['content-disposition']
+            #filename = re.findall("filename=(.+)", content_disposition)
+            with open('attachments/' + attachmentName, 'wb') as f:
                 f.write(r.content)
 
             # save to database
-            values = (count, attachmentUrl, filename, postID)
+            values = (count, attachmentUrl, attachmentName, postID)
             cursor.execute('INSERT INTO attachment VALUES (?,?,?,?)', values)
             conn.commit()
+            print "inserted attachment " + str(attachmentName)
+
+            count = count + 1
 
 
 # create sqlite database connection
@@ -1069,3 +1088,4 @@ scrapeTopics()
 scrapePosts()
 scrapeMembers()
 scrapeEmojis()
+scrapeAttachments()
