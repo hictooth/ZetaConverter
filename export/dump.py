@@ -1066,7 +1066,11 @@ def scrapeAttachments():
             #content_disposition = r.headers['content-disposition']
             #filename = re.findall("filename=(.+)", content_disposition)
             with open('attachments/' + attachmentName, 'wb') as f:
-                f.write(r.content)
+                try:
+                    f.write(r.content)
+                except:
+                    traceback.print_exc()
+                    print "Unable to write file, skipping."
 
             # save to database
             values = (count, attachmentUrl, attachmentName, postID)
