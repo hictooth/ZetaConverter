@@ -1,0 +1,5 @@
+services:
+  s9e.zetabbcodes.listener:
+    class: s9e\zetabbcodes\listener
+    tags:
+      - { name: event.listener }
