@@ -1074,9 +1074,13 @@ def scrapeAttachments():
 
             # save to database
             values = (count, attachmentUrl, attachmentName, postID)
-            cursor.execute('INSERT INTO attachment VALUES (?,?,?,?)', values)
-            conn.commit()
-            print "inserted attachment " + str(attachmentName)
+            try:
+                cursor.execute('INSERT INTO attachment VALUES (?,?,?,?)', values)
+                conn.commit()
+                print "inserted attachment " + str(attachmentName)
+            except:
+                traceback.print_exc()
+                print "Attachment already exists in database, skipping"
 
             count = count + 1
 
