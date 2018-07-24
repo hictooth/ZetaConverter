@@ -32,11 +32,11 @@ from urlparse import urlparse
 from threading import Thread
 
 
-BOARD_URL = "http://s4.zetaboards.com/MyBoardName/"
-ADMIN_URL = "http://s4.zetaboards.com/MyBoardName/admin/"
-COOKIE = {"6068663sess": "04ab6ae6994af2ff126097657"}
+BOARD_URL = "http://w11.zetaboards.com/boardname/"
+ADMIN_URL = "http://39248.11.zetaboards.com/admin/"
+COOKIE = {"39248sess": "09b77b1787f07f3dd56297430"}
 COOKIE_POLL = COOKIE
-COOKIE_ADMIN = {"6068663acp": "c3798e7ba649d6ac6097657"}
+COOKIE_ADMIN = {"39248acp": "210a54jd6b64963c6228232"}
 
 # untested. probably works, but...
 DOWNLOAD_AVATARS = False
@@ -654,7 +654,7 @@ def scrapePosts():
                 links = footIcons.find_all("a", href=True)
                 donebbcode = False
                 for link in links:
-                    if "/post/?mode=2&type=2" in link["href"]:
+                    if "/post/?mode=2&type=2" in link["href"] or "/post/?mode=2&amp;type=2" in link["href"]:
                         # found the link to the quote page
                         donebbcode = True
 
@@ -690,16 +690,20 @@ def scrapePosts():
                 print bcolors.OKGREEN + "Inserted post ID: " + str(postID) + bcolors.ENDC
 
 
-def scrapeMembers():
+def scrapeMembers(searchurl=None):
     print "(5/5) ########## SCRAPING MEMBERS #########"
 
     sys.setrecursionlimit(100) # this will need to be adjusted depending on how many deleted users your board has (mine has 3, I think). Make sure it's BIGGER.
 
     # get admin member search page
-    url = ADMIN_URL + "?menu=mem&c=4&do_search=1&name_order=startswith&search_email=@&pg=1"
-    r = requests.get(url, cookies=COOKIE_ADMIN)
+    #url = ADMIN_URL + "?menu=mem&c=4&do_search=1&name_order=startswith&search_email=@&pg=1"
+    secondUrl = None
+    if searchurl == None:
+        searchurl = ADMIN_URL + "?menu=mem&c=4&do_search=1&name_order=startswith&ban=1@&pg="
+        secondUrl = ADMIN_URL + "?menu=mem&c=4&do_search=1&name_order=startswith&ban=2@&pg="
+    r = requests.get(searchurl + "1", cookies=COOKIE_ADMIN)
     if r.status_code != 200:
-        print bcolors.FAIL + "Non-200 status code scraping " + url + bcolors.ENDC
+        print bcolors.FAIL + "Non-200 status code scraping " + searchurl + bcolors.ENDC
         sys.exit(0)
 
     # parse webpage
@@ -713,16 +717,27 @@ def scrapeMembers():
     #loop through pages
     for page in range(1, (maxPage+1)):
 
-        if page != 1:
-            # get admin member search page
-            url = ADMIN_URL + "?menu=mem&c=4&do_search=1&name_order=startswith&search_email=@&pg=" + str(page)
-            r = requests.get(url, cookies=COOKIE_ADMIN)
-            if r.status_code != 200:
-                print bcolors.FAIL + "Non-200 status code scraping " + url + bcolors.ENDC
-                sys.exit(0)
+        #if page != 1:
+        #    # get admin member search page
+        #    url = ADMIN_URL + "?menu=mem&c=4&do_search=1&name_order=startswith&search_email=@&pg=" + str(page)
+        #    r = requests.get(url, cookies=COOKIE_ADMIN)
+        #    if r.status_code != 200:
+        #        print bcolors.FAIL + "Non-200 status code scraping " + url + bcolors.ENDC
+        #        sys.exit(0)
+        #
+        #    # parse webpage
+        #    soup = BeautifulSoup(r.text, "html5lib")
 
-            # parse webpage
-            soup = BeautifulSoup(r.text, "html5lib")
+        #url = ADMIN_URL + "?menu=mem&c=4&do_search=1&name_order=startswith&search_email=@&pg=" + str(page)
+        r = requests.get(searchurl + str(page), cookies=COOKIE_ADMIN)
+        if r.status_code != 200:
+            print bcolors.FAIL + "Non-200 status code scraping " + searchurl + bcolors.ENDC
+            sys.exit(0)
+
+        # parse webpage
+        soup = BeautifulSoup(r.text, "html5lib")
+
+        print searchurl + str(page)
 
         usersContainer = soup.find("table", id="membersearch")
         users = usersContainer.find_all("td", {"class":"ms_name"})
@@ -938,9 +953,18 @@ def scrapeMembers():
 
                 # insert into the database
                 values = (userID, username, password, email, birthday, number, joindate, ip, group, title, warning, pms, ipbans, photo, photolocal, avatar, avatarlocal, interests, signaturebbcode, signaturehtml, location, aol, yahoo, msn, homepage, lastActive, hourDifference, numPosts)
-                cursor.execute('INSERT INTO member VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', values)
-                conn.commit()
-                print bcolors.OKGREEN + "Inserted user ID: " + str(userID) + bcolors.ENDC
+                try:
+                    cursor.execute('INSERT INTO member VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', values)
+                    conn.commit()
+                    print bcolors.OKGREEN + "Inserted user ID: " + str(userID) + bcolors.ENDC
+                except sqlite3.IntegrityError:
+                    print "SQLITE3 INTEGRITY ERROR - inserting member into database\n"
+                    print values
+
+
+    # scrape more users
+    if secondUrl != None:
+        scrapeMembers(secondUrl)
 
 
 def getTapatalkJoinDate(userNumber, username):
@@ -1066,21 +1090,13 @@ def scrapeAttachments():
             #content_disposition = r.headers['content-disposition']
             #filename = re.findall("filename=(.+)", content_disposition)
             with open('attachments/' + attachmentName, 'wb') as f:
-                try:
-                    f.write(r.content)
-                except:
-                    traceback.print_exc()
-                    print "Unable to write file, skipping."
+                f.write(r.content)
 
             # save to database
             values = (count, attachmentUrl, attachmentName, postID)
-            try:
-                cursor.execute('INSERT INTO attachment VALUES (?,?,?,?)', values)
-                conn.commit()
-                print "inserted attachment " + str(attachmentName)
-            except:
-                traceback.print_exc()
-                print "Attachment already exists in database, skipping"
+            cursor.execute('INSERT INTO attachment VALUES (?,?,?,?)', values)
+            conn.commit()
+            print "inserted attachment " + str(attachmentName)
 
             count = count + 1
 
