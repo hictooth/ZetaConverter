@@ -77,6 +77,18 @@ class listener implements EventSubscriberInterface
 
 		$bbcodes = [
 			[
+				'[b]{TEXT}[/b]',
+				'<strong>{TEXT}</strong>'
+			],
+			[
+				'[i]{TEXT}[/i]',
+				'<em>{TEXT}</em>'
+			],
+			[
+				'[u]{TEXT}[/u]',
+				'<u>{TEXT}</u>'
+			],
+			[
 				'[s]{TEXT}[/s]',
 				'<del>{TEXT}</del>'
 			],
@@ -97,56 +109,66 @@ class listener implements EventSubscriberInterface
 				'<small>{TEXT}</small>'
 			],
 			[
+				'[color={COLOR}]{TEXT}[/color]',
+				'<span style="color:{COLOR}">{TEXT}</span>'
+			],
+			[
 				'[bgcolor={COLOR}]{TEXT}[/bgcolor]',
 				'<span style="background-color:{COLOR}">{TEXT}</span>'
+			],
+			[
+				'[BORDER={PARSE=/^(?<border>.+),(?<width>.+),(?<style>.+)$/,/^(?<border>.+),(?<width>.+)$/} width={NUMBER;optional} style={IDENTIFIER;optional}]{TEXT}[/BORDER]',
+				'<span>
+					<xsl:attribute name="style">
+						<xsl:text>border:</xsl:text>
+						<xsl:text> </xsl:text>
+						<xsl:choose>
+							<xsl:when test="@width">
+								<xsl:value-of select="@width"/>
+							</xsl:when>
+							<xsl:otherwise>
+								<xsl:text>1</xsl:text>
+							</xsl:otherwise>
+						</xsl:choose>
+						<xsl:text>px </xsl:text>
+						<xsl:choose>
+							<xsl:when test="@style">
+								<xsl:value-of select="@style"/>
+							</xsl:when>
+							<xsl:otherwise>
+								<xsl:text>solid</xsl:text>
+							</xsl:otherwise>
+						</xsl:choose>
+						<xsl:text> </xsl:text>
+						<xsl:choose>
+							<xsl:when test="@border">
+								<xsl:value-of select="@border"/>
+							</xsl:when>
+							<xsl:otherwise>
+								<xsl:text>black</xsl:text>
+							</xsl:otherwise>
+						</xsl:choose>
+					</xsl:attribute>
+					<xsl:apply-templates/>
+				</span>'
 			],
 			[
 				'[center]{TEXT}[/center]',
 				'<span style="display:block;text-align:center">{TEXT}</span>'
 			],
 			[
-				'[left]{TEXT}[/left]',
-				'<span style="display:block;text-align:left">{TEXT}</span>'
-			],
-			[
 				'[right]{TEXT}[/right]',
 				'<span style="display:block;text-align:right">{TEXT}</span>'
+			],
+			[
+				'[left]{TEXT}[/left]',
+				'<span style="display:block;text-align:left">{TEXT}</span>'
 			],
 			[
 				'[font={IDENTIFIER}]{TEXT}[/font]',
 				'<span style="font-family:{IDENTIFIER}">{TEXT}</span>'
 			],
 			[
-				'[hr]',
-				'<hr>'
-			],
-			[
-				'[spoiler={SIMPLETEXT;optional}]{TEXT}[/spoiler]',
-				'<div class="spoiler_toggle" onclick="$(this).next().toggle();">
-				  <xsl:choose>
-				    <xsl:when test="@spoiler">
-				      <xsl:value-of select="@spoiler"/>
-				    </xsl:when>
-				    <xsl:otherwise>
-				      <xsl:text>Spoiler: click to toggle</xsl:text>
-				    </xsl:otherwise>
-				  </xsl:choose>
-				</div>
-				<div class="spoiler" style="display:none;">{TEXT}</div>'
-			],
-			[
-				'[nocode #ignoreTags=true]{TEXT}[/nocode]',
-				'{TEXT}'
-			],
-			[
-				'[html]{TEXT}[/html]',
-				'<pre data-hljs="" data-s9e-livepreview-postprocess="if(\'undefined\'!==typeof hljs)hljs._hb(this)"><code>
-				    <xsl:attribute name="class">language-html</xsl:attribute>
-				    <xsl:apply-templates />
-				</code></pre>
-				<script>if("undefined"!==typeof hljs)hljs._ha();else if("undefined"===typeof hljsLoading){hljsLoading=1;var a=document.getElementsByTagName("head")[0],e=document.createElement("link");e.type="text/css";e.rel="stylesheet";e.href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.7.0/styles/default.min.css";a.appendChild(e);e=document.createElement("script");e.type="text/javascript";e.onload=function(){var d={},f=0;hljs._hb=function(b){b.removeAttribute("data-hljs");var c=b.innerHTML;c in d?b.innerHTML=d[c]:(7&lt;++f&amp;&amp;(d={},f=0),hljs.highlightBlock(b.firstChild),d[c]=b.innerHTML)};hljs._ha=function(){for(var b=document.querySelectorAll("pre[data-hljs]"),c=b.length;0&lt;c;)hljs._hb(b.item(--c))};hljs._ha()};e.async=!0;e.src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.7.0/highlight.min.js";a.appendChild(e)}</script>'
-			],
-			/*[
 				"[QUOTE
 					author={TEXT1;optional}
 					post_id={UINT;optional}
@@ -186,55 +208,31 @@ class listener implements EventSubscriberInterface
 						{TEXT2}
 					</div>
 				</blockquote>'
-			],*/
-			[
-				'[BORDER={PARSE=/^(?<border>.+),(?<width>.+),(?<style>.+)$/,/^(?<border>.+),(?<width>.+)$/} width={NUMBER;optional} style={IDENTIFIER;optional}]{TEXT}[/BORDER]',
-				'<span>
-					<xsl:attribute name="style">
-						<xsl:text>border:</xsl:text>
-						<xsl:text> </xsl:text>
-						<xsl:choose>
-							<xsl:when test="@width">
-								<xsl:value-of select="@width"/>
-							</xsl:when>
-							<xsl:otherwise>
-								<xsl:text>1</xsl:text>
-							</xsl:otherwise>
-						</xsl:choose>
-						<xsl:text>px </xsl:text>
-						<xsl:choose>
-							<xsl:when test="@style">
-								<xsl:value-of select="@style"/>
-							</xsl:when>
-							<xsl:otherwise>
-								<xsl:text>solid</xsl:text>
-							</xsl:otherwise>
-						</xsl:choose>
-						<xsl:text> </xsl:text>
-						<xsl:choose>
-							<xsl:when test="@border">
-								<xsl:value-of select="@border"/>
-							</xsl:when>
-							<xsl:otherwise>
-								<xsl:text>black</xsl:text>
-							</xsl:otherwise>
-						</xsl:choose>
-					</xsl:attribute>
-					<xsl:apply-templates/>
-				</span>'
 			],
 			[
-				'[me]',
-				'<xsl:value-of select="$USERNAME"/>'
+				'[html #ignoreTags=true]{TEXT}[/html]',
+				'<blockquote class="code_blockquote">
+					<dl>
+						<dt>Code: HTML</dt>
+						<dd>&nbsp;</dd>
+					</dl>
+					<code>{TEXT}</code>
+				</blockquote>'
 			],
 			[
-				'[member]{TEXT}[/member]',
-				'<xsl:if test="$IS_MEMBER=1">{TEXT}</xsl:if>'
+				'[nocode #ignoreTags=true]{TEXT}[/nocode]',
+				'{TEXT}'
 			],
 			[
-				'[staff]{TEXT}[/staff]',
-				'<xsl:if test="$IS_STAFF=1">{TEXT}</xsl:if>'
-			]/*,
+				'[code #ignoreTags=true]{TEXT}[/code]',
+				'<blockquote class="code_blockquote">
+					<dl>
+						<dt>Code: </dt>
+						<dd>&nbsp;</dd>
+					</dl>
+					<code>{TEXT}</code>
+				</blockquote>'
+			],
 			[
 				'[img={SIMPLETEXT;optional} width={NUMBER;optional} height={NUMBER;optional}]{URL}[/img]',
 				'<img src="{URL}">
@@ -254,7 +252,37 @@ class listener implements EventSubscriberInterface
 				    </xsl:choose>
 				  <xsl:apply-templates/>
 				</img>'
-			]*/
+			],
+			[
+				'[me]',
+				'<xsl:value-of select="$USERNAME"/>'
+			],
+			[
+				'[hr]',
+				'<hr>'
+			],
+			[
+				'[spoiler={SIMPLETEXT;optional}]{TEXT}[/spoiler]',
+				'<div class="spoiler_toggle" onclick="$(this).next().toggle();">
+				  <xsl:choose>
+				    <xsl:when test="@spoiler">
+				      <xsl:value-of select="@spoiler"/>
+				    </xsl:when>
+				    <xsl:otherwise>
+				      <xsl:text>Spoiler: click to toggle</xsl:text>
+				    </xsl:otherwise>
+				  </xsl:choose>
+				</div>
+				<div class="spoiler" style="display:none;">{TEXT}</div>'
+			],
+			[
+				'[member]{TEXT}[/member]',
+				'<xsl:if test="$IS_MEMBER=1">{TEXT}</xsl:if>'
+			],
+			[
+				'[staff]{TEXT}[/staff]',
+				'<xsl:if test="$IS_STAFF=1">{TEXT}</xsl:if>'
+			]
 		];
 
 		foreach ($bbcodes as list($usage, $template))
