@@ -16,46 +16,8 @@ class listener implements EventSubscriberInterface
 	{
 		return [
 			'core.text_formatter_s9e_configure_after'  => 'afterConfigure',
-			'core.text_formatter_s9e_configure_before' => 'beforeConfigure',
 			'core.text_formatter_s9e_render_before' => 'beforeRender',
 		];
-	}
-
-	public function afterConfigure($event)
-	{
-		$configurator = $event['configurator'];
-
-		// Interpret [quote=foo,(time=123)] as [quote author=foo time=123]
-		$configurator->tags['quote']->attributePreprocessors->add(
-			'author',
-			'/^(?<author>.+),\\(time=(?<time>\\d+)\\)$/'
-		);
-
-		// Interpret [img=10,20] as [img width=10 height=20]
-		$imgTag = '[img={SIMPLETEXT;optional} width={NUMBER;optional} height={NUMBER;optional}]{URL}[/img]';
-		$imgHtml = '<img src="{URL}">
-				<xsl:choose>
-					<xsl:when test="@width">
-						<xsl:attribute name="width">
-							<xsl:value-of select="@width"/>
-						</xsl:attribute>
-					</xsl:when>
-				</xsl:choose>
-				<xsl:choose>
-					<xsl:when test="@height">
-						<xsl:attribute name="height">
-							<xsl:value-of select="@height"/>
-						</xsl:attribute>
-					</xsl:when>
-				</xsl:choose>
-			<xsl:apply-templates/>
-		</img>';
-		$configurator->BBCodes->addCustom($imgTag, new UnsafeTemplate($imgHtml));
-
-		$configurator->tags['img']->attributePreprocessors->add(
-			'img',
-			'/^(?<width>\\d+),(?<height>\\d+)$/'
-		);
 	}
 
 	public function beforeRender($event) {
@@ -71,7 +33,7 @@ class listener implements EventSubscriberInterface
 		$renderer->setParameter('IS_STAFF', $isStaff);
 	}
 
-	public function beforeConfigure($event)
+	public function afterConfigure($event)
 	{
 		$configurator = $event['configurator'];
 
@@ -289,5 +251,38 @@ class listener implements EventSubscriberInterface
 		{
 			$configurator->BBCodes->addCustom($usage, new UnsafeTemplate($template));
 		}
+		
+		
+		// Interpret [quote=foo,(time=123)] as [quote author=foo time=123]
+		$configurator->tags['quote']->attributePreprocessors->add(
+			'author',
+			'/^(?<author>.+),\\(time=(?<time>\\d+)\\)$/'
+		);
+
+		// Interpret [img=10,20] as [img width=10 height=20]
+		$imgTag = '[img={SIMPLETEXT;optional} width={NUMBER;optional} height={NUMBER;optional}]{URL}[/img]';
+		$imgHtml = '<img src="{URL}">
+				<xsl:choose>
+					<xsl:when test="@width">
+						<xsl:attribute name="width">
+							<xsl:value-of select="@width"/>
+						</xsl:attribute>
+					</xsl:when>
+				</xsl:choose>
+				<xsl:choose>
+					<xsl:when test="@height">
+						<xsl:attribute name="height">
+							<xsl:value-of select="@height"/>
+						</xsl:attribute>
+					</xsl:when>
+				</xsl:choose>
+			<xsl:apply-templates/>
+		</img>';
+		$configurator->BBCodes->addCustom($imgTag, new UnsafeTemplate($imgHtml));
+
+		$configurator->tags['img']->attributePreprocessors->add(
+			'img',
+			'/^(?<width>\\d+),(?<height>\\d+)$/'
+		);
 	}
 }
