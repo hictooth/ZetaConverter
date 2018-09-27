@@ -270,7 +270,7 @@ class listener implements EventSubscriberInterface
 			],
 			[
 				'[td]{TEXT}[/td]',
-				'<dt>{TEXT}</td>'
+				'<td>{TEXT}</td>'
 			]
 		];
 
