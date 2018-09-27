@@ -244,6 +244,33 @@ class listener implements EventSubscriberInterface
 			[
 				'[staff]{TEXT}[/staff]',
 				'<xsl:if test="$IS_STAFF=1">{TEXT}</xsl:if>'
+			],
+			[
+				'[table={SIMPLETEXT;optional}]{TEXT}[/table]',
+				'<table>
+					<xsl:choose>
+						<xsl:when test="@table">
+							<thead>
+								<tr>
+									<td colspan="3">
+										<xsl:value-of select="@table"/>
+									</td>
+								</tr>
+							</thead>
+						</xsl:when>
+					</xsl:choose>
+					<tbody>
+						{TEXT}
+					</tbody>
+				</table>'
+			],
+			[
+				'[tr]{TEXT}[/tr]',
+				'<tr>{TEXT}</tr>'
+			],
+			[
+				'[td]{TEXT}[/td]',
+				'<dt>{TEXT}</td>'
 			]
 		];
 
