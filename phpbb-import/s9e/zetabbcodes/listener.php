@@ -252,9 +252,9 @@ class listener implements EventSubscriberInterface
 						<xsl:when test="@table">
 							<thead>
 								<tr>
-									<td colspan="3">
+									<th colspan="100%">
 										<xsl:value-of select="@table"/>
-									</td>
+									</th>
 								</tr>
 							</thead>
 						</xsl:when>
