@@ -129,6 +129,7 @@ while($row = $ret->fetchArray(SQLITE3_ASSOC) ) {
     'user_sig_bbcode_uid'       => $signatureuid,
     'user_sig_bbcode_bitfield'  => $signaturebitfield,
     'user_birthday'             => $row['birthday'],
+    'user_number'               => $row['number'],
   );
 
   // custom profile fields that don't go into the main user table
@@ -138,6 +139,9 @@ while($row = $ret->fetchArray(SQLITE3_ASSOC) ) {
     'pf_phpbb_interests'        => $row['interests'],
     'pf_phpbb_aol'              => $row['aol'],
     'pf_phpbb_yahoo'            => $row['yahoo'],
+    'pf_phpbb_title'            => $row['title'],
+    'pf_phpbb_photo'            => $row['photo'],
+    'pf_phpbb_msn'              => $row['msn'],
   );
 
 
