@@ -137,7 +137,7 @@ while($row = $ret->fetchArray(SQLITE3_ASSOC) ) {
     'pf_phpbb_yahoo'            => $row['yahoo'],
     'pf_phpbb_title'            => $row['title'],
     'pf_phpbb_photo'            => $row['photo'],
-    'pf_phpbb_msn'              => $row['msn'],
+    /*'pf_phpbb_msn'              => $row['msn'],*/
   );
 
 
