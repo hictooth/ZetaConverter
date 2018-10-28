@@ -67,9 +67,10 @@ $ret = $zeta->query($sql);
 // loop through and add all users
 while($row = $ret->fetchArray(SQLITE3_ASSOC) ) {
 
-  /*if ($row['id'] < 3886684) {
+  // skip Eel
+  if ($row['id'] < 3802956) {
     continue;
-  }*/
+  }
 
   echo "Processing user " . $row['id'] . " :: " . $row['name'] . "\n";
 
